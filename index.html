@@ -20,7 +20,7 @@
   --border:rgba(0,0,0,0.09);
   --font:'DM Sans',sans-serif;--r:12px;
 }
-body{font-family:var(--font);background:var(--bg);co$2a$10$xQQXJ.WAGLB/Pq8.5KToEei4hL/UOZckOwXDGeRjY997/50UQHhk6lor:var(--ink);font-size:14px;min-height:100vh;}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px;min-height:100vh;}
 .app{max-width:1080px;margin:0 auto;padding:18px 14px 60px;}
 .header{background:var(--blue);border-radius:var(--r);margin-bottom:20px;overflow:hidden;display:grid;grid-template-columns:1fr auto;box-shadow:0 6px 24px rgba(0,84,166,.28);}
 .hl{padding:20px 28px;}.hr{background:rgba(255,255,255,.1);padding:20px 28px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;border-left:1px solid rgba(255,255,255,.15);}
@@ -735,15 +735,15 @@ function ini(n){return n.split(' ').map(w=>w[0]).filter(Boolean).slice(0,2).join
 // ===== JSONBIN PERSISTENT STORAGE =====
 // Data is saved to JSONBin.io - survives browser clears, works on any device
 
-const JSONBIN_API_KEY = '$2a$10$xQQXJ.WAGLB/Pq8.5KToEei4hL/UOZckOwXDGeRjY997/50UQHhk6';
-const JSONBIN_BIN_ID  = '6a1def6bf5f4af5e29a9e070';   // filled in after first run
+const JSONBIN_API_KEY = 'PASTE_YOUR_API_KEY_HERE';
+const JSONBIN_BIN_ID  = 'PASTE_YOUR_BIN_ID_HERE';
 
 let _hvmData = {};      // in-memory cache
 let _saveTimer = null;  // debounce timer so we don't hammer the API
 
 async function _loadAllData() {
   // If no bin ID yet, start with empty data
-  if (JSONBIN_BIN_ID === '6a1def6bf5f4af5e29a9e070') {
+  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) {
     console.warn('JSONBin not configured yet - using empty data');
     _hvmData = {};
     return;
@@ -765,7 +765,7 @@ async function _saveAllData() {
   // Also keep a localStorage backup in case of network issues
   try { localStorage.setItem('hvm_backup', JSON.stringify(_hvmData)); } catch(_){}
 
-  if (JSONBIN_BIN_ID === '6a1def6bf5f4af5e29a9e070') return;
+  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
   try {
     await fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID, {
       method: 'PUT',
