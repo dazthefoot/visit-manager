@@ -733,81 +733,53 @@ const OCOL=[["#fdeee6","#d94f00"],["#e0f4f1","#006e5e"],["#fff3e0","#b35c00"],["
 function custColor(name){const c=CUSTOMERS.find(x=>x.name===name);if(!c)return["#ddeeff","#0054a6"];if(GCOL[c.group])return GCOL[c.group];const i=CUSTOMERS.filter(x=>x.group==="other").findIndex(x=>x.name===name);return OCOL[i%OCOL.length];}
 function ini(n){return n.split(' ').map(w=>w[0]).filter(Boolean).slice(0,2).join('').toUpperCase();}
 // ===== JSONBIN PERSISTENT STORAGE =====
-// Data is saved to JSONBin.io - survives browser clears, works on any device
-
 const JSONBIN_API_KEY = '$2a$10$FXXCI8yJxXMPAxieH36NuORKlX.06TpsecPWXMILZSVhTg73cIZFm';
-const JSONBIN_BIN_ID  = '6a1def6bf5f4af5e29a9e070';
+const JSONBIN_BIN_ID  = '6a1f2371f5f4af5e29aeb29b';
+const JSONBIN_URL     = 'https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID;
 
-let _hvmData = {};      // in-memory cache
-let _saveTimer = null;  // debounce timer so we don't hammer the API
+let _saveTimer = null;
+let _hvmData   = {};
 
-async function _loadAllData() {
-  // If no bin ID yet, start with empty data
-  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) {
-    console.warn('JSONBin not configured yet - using empty data');
-    _hvmData = {};
-    return;
-  }
-  try {
-    const r = await fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID + '/latest', {
-      headers: { 'X-Master-Key': JSONBIN_API_KEY }
-    });
-    const json = await r.json();
-    _hvmData = json.record || {};
-  } catch(e) {
-    console.error('Could not load data from JSONBin:', e);
-    // Fall back to localStorage as a safety net
-    try { _hvmData = JSON.parse(localStorage.getItem('hvm_backup') || '{}'); } catch(_){}
+async function _loadAllData(){
+  try{
+    const r=await fetch(JSONBIN_URL+'/latest',{headers:{'X-Master-Key':JSONBIN_API_KEY}});
+    const j=await r.json();
+    const d=j.record||{};
+    if(d.data==='empty') return {};
+    return d;
+  }catch(e){
+    console.warn('JSONBin load failed, trying backup:',e);
+    try{const bk=localStorage.getItem('hvm_backup');if(bk)return JSON.parse(bk);}catch(_){}
+    return {};
   }
 }
 
-async function _saveAllData() {
-  // Also keep a localStorage backup in case of network issues
-  try { localStorage.setItem('hvm_backup', JSON.stringify(_hvmData)); } catch(_){}
-
-  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
-  try {
-    await fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY
-      },
-      body: JSON.stringify(_hvmData)
-    });
-  } catch(e) {
-    console.error('Could not save to JSONBin:', e);
-  }
+function _debouncedSave(){
+  try{localStorage.setItem('hvm_backup',JSON.stringify(_hvmData));}catch(_){}
+  if(_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(async()=>{
+    try{
+      await fetch(JSONBIN_URL,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_API_KEY},
+        body:JSON.stringify(_hvmData)
+      });
+    }catch(e){console.warn('JSONBin save failed:',e);}
+  },800);
 }
 
-function _debouncedSave() {
-  // Wait 800ms after last change before saving - prevents rapid API calls
-  if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(_saveAllData, 800);
-}
+function ls(k,d){if(k in _hvmData)return _hvmData[k];return d;}
+function lss(k,v){_hvmData[k]=v;_debouncedSave();}
 
-function ls(k, d) {
-  if (k in _hvmData) return _hvmData[k];
-  return d;
-}
-
-function lss(k, v) {
-  _hvmData[k] = v;
-  _debouncedSave();
-}
-
-let visits = [];
-let logs = [];
-let actions = [];
-let iifs = [];
-let iifArchive = [];
-
-function save() {
-  _hvmData['hvm_v']           = visits;
-  _hvmData['hvm_l']           = logs;
-  _hvmData['hvm_a']           = actions;
-  _hvmData['hvm_i']           = iifs;
-  _hvmData['hvm_iif_archive'] = iifArchive;
+let visits=[];
+let logs=[];
+let actions=[];
+let iifs=[];
+let iifArchive=[];
+function save(){
+  _hvmData['hvm_v']=visits;_hvmData['hvm_l']=logs;
+  _hvmData['hvm_a']=actions;_hvmData['hvm_i']=iifs;
+  _hvmData['hvm_iif_archive']=iifArchive;
   _debouncedSave();
 }
 
@@ -1795,7 +1767,7 @@ function exportLogWord(){
 
 // ===== ICS IMPORT =====
 // ===== SETTINGS =====
-// These are populated by init() after data loads from JSONBin
+// Populated by initApp() after data loads from JSONBin
 var settings={repName:'',repEmail:'',territory:'',freqGPI:30,freqSmurfit:30,freqHuber:30,freqOther:45};
 var customCustomers=[];
 var hiddenBuiltins=[];
@@ -1996,15 +1968,15 @@ function clearAllData(){
   settings={repName:'',repEmail:'',territory:'',freqGPI:30,freqSmurfit:30,freqHuber:30,freqOther:45};
   customCustomers=[];custOverrides={};
   _hvmData={};
-  save();lss('hvm_settings',settings);lss('hvm_hidden_builtins',hiddenBuiltins);lss('hvm_admin',adminDays);lss('hvm_custom_custs',customCustomers);lss('hvm_cust_overrides',custOverrides);
+  save();lss('hvm_settings',settings);lss('hvm_hidden_builtins',hiddenBuiltins);
+  lss('hvm_admin',adminDays);lss('hvm_custom_custs',customCustomers);lss('hvm_cust_overrides',custOverrides);
   renderDash();renderSavedLogs();renderSetCusts();loadSettings();updateStorageDisplay();
   toast('All data cleared');
 }
 
 
 // ===== ADMIN DAY =====
-// Populated by init()
-var adminDays = [];
+var adminDays = []; // Populated by initApp()
 
 // Temp state for current form
 var admAchieved = [];
@@ -2941,26 +2913,22 @@ function exportVisitWord(vid){
   toast('\u2193 Visit report downloaded');
 }
 
-async function init(){
-  // Show loading state
-  document.body.style.opacity = '0.5';
+async function initApp(){
+  document.body.style.opacity='0.4';
+  _hvmData = await _loadAllData();
 
-  // Load all data from JSONBin before rendering anything
-  await _loadAllData();
+  visits         = _hvmData['hvm_v']             || [];
+  logs           = _hvmData['hvm_l']             || [];
+  actions        = _hvmData['hvm_a']             || [];
+  iifs           = _hvmData['hvm_i']             || [];
+  iifArchive     = _hvmData['hvm_iif_archive']   || [];
+  adminDays      = _hvmData['hvm_admin']         || [];
+  settings       = Object.assign({repName:'',repEmail:'',territory:'',freqGPI:30,freqSmurfit:30,freqHuber:30,freqOther:45}, _hvmData['hvm_settings']||{});
+  customCustomers= _hvmData['hvm_custom_custs']    || [];
+  hiddenBuiltins = _hvmData['hvm_hidden_builtins'] || [];
+  custOverrides  = _hvmData['hvm_cust_overrides']  || {};
 
-  // Populate in-memory variables from loaded data
-  visits          = _hvmData['hvm_v']            || [];
-  logs            = _hvmData['hvm_l']            || [];
-  actions         = _hvmData['hvm_a']            || [];
-  iifs            = _hvmData['hvm_i']            || [];
-  iifArchive      = _hvmData['hvm_iif_archive']  || [];
-  adminDays       = _hvmData['hvm_admin']        || [];
-  settings        = Object.assign({repName:'',repEmail:'',territory:'',freqGPI:30,freqSmurfit:30,freqHuber:30,freqOther:45}, _hvmData['hvm_settings']||{});
-  customCustomers = _hvmData['hvm_custom_custs']    || [];
-  hiddenBuiltins  = _hvmData['hvm_hidden_builtins'] || [];
-  custOverrides   = _hvmData['hvm_cust_overrides']  || {};
-
-  document.body.style.opacity = '1';
+  document.body.style.opacity='1';
   document.getElementById('date-display').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('log-date').value=today();
   document.getElementById('sch-date').value=today();
@@ -2972,7 +2940,7 @@ async function init(){
   populateAIYearSelect();
   populateQESelects();
 }
-init();
+initApp();
 </script>
 </body>
 </html>
